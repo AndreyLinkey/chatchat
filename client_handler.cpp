@@ -22,7 +22,7 @@ void client_handler::run()
         if(count > 0) {
             try {
                 Message msg = Message::from_raw_data(data_buff_, client_id_);
-                // TODO process message here
+                on_receive_(msg);
             } catch (const std::exception &e) {
                 std::cerr << "error while processing message: " << e.what() << std::endl;
             }
@@ -54,16 +54,33 @@ bool client_handler::terminated() const
     return terminate_;
 }
 
-std::vector<std::string> client_handler::groups() const
+const std::vector<std::string>& client_handler::groups() const
 {
-    std::lock_guard<std::mutex> lock(groups_lock_);
-    return std::vector<std::string>(groups_);
+    return groups_;
 }
 
-bool client_handler::in_group(const std::string &group) const
+bool client_handler::in_group(const std::string& group) const
 {
-    std::lock_guard<std::mutex> lock(groups_lock_);
     return std::find(groups_.cbegin(), groups_.cend(), group) != groups_.end();
+}
+
+bool client_handler::subscribe(const std::string& group)
+{
+    if (std::find(groups_.cbegin(), groups_.cend(), group) == groups_.end()) {
+        groups_.push_back(group);
+        return true;
+    }
+    return false;
+}
+
+bool client_handler::leave(const std::string& group)
+{
+    std::vector<std::string>::const_iterator it = std::find(groups_.cbegin(), groups_.cend(), group);
+    if (it == groups_.cend()) {
+        return false;
+    }
+    groups_.erase(it);
+    return true;
 }
 
 bool client_handler::echoing_required() const
@@ -71,9 +88,19 @@ bool client_handler::echoing_required() const
     return echoing_msg_;
 }
 
+void client_handler::set_echoing(bool value)
+{
+    echoing_msg_ = value;
+}
+
 bool client_handler::processing_required() const
 {
     return processing_msg_;
+}
+
+void client_handler::set_processing(bool value)
+{
+    processing_msg_ = value;
 }
 
 unsigned int client_handler::read_data()

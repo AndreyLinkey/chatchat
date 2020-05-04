@@ -8,8 +8,11 @@
 #include <thread>
 #include <memory>
 #include <vector>
+#include <map>
 #include <functional>
 #include <iostream>
+#include <mutex>
+#include <algorithm>
 
 #include "client_handler.h"
 #include "message.h"
@@ -28,12 +31,17 @@ private:
 
     void prepare_socket(unsigned short port);
     void accept_connection();
+    void send_message(unsigned int client_id, const std::string& message) const;
+    void send_message(const std::vector<unsigned int>& client_ids, const std::string &message) const;
     void cleanup_terminated();
+    std::vector<unsigned int> subscribed_handlers(const std::vector<std::string>& groups) const;
+    std::string process_message(const std::string& message);
 
+    std::mutex processing_;
     int socket_fd_;
-    unsigned client_idx_;
-    std::vector<client_handler_ptr> clients_;
-    std::vector<client_thread_ptr> threads_;
+    unsigned int new_client_idx_;
+    std::map<unsigned int, client_handler_ptr> clients_;
+    std::map<unsigned int, client_thread_ptr> threads_;
 
 };
 

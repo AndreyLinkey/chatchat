@@ -1,6 +1,6 @@
 #include "message.h"
 
-Message::Message(unsigned client_id, MessageKind kind)
+Message::Message(unsigned int client_id, MessageKind kind)
     : client_id_(client_id), kind_(kind), argument_(false)
 {
     if (kind_ != MessageKind::who) {
@@ -8,7 +8,7 @@ Message::Message(unsigned client_id, MessageKind kind)
     }
 }
 
-Message::Message(unsigned client_id, MessageKind kind, std::string value)
+Message::Message(unsigned int client_id, MessageKind kind, std::string value)
     : client_id_(client_id), kind_(kind), argument_(value)
 {
     if (kind_ != MessageKind::message && kind_ != MessageKind::subscribe && kind_ != MessageKind::leave) {
@@ -17,7 +17,7 @@ Message::Message(unsigned client_id, MessageKind kind, std::string value)
     }
 }
 
-Message::Message(unsigned client_id, MessageKind kind, bool enabled)
+Message::Message(unsigned int client_id, MessageKind kind, bool enabled)
     : client_id_(client_id), kind_(kind), argument_(enabled)
 {
     if (kind_ != MessageKind::set_echoing && kind_ != MessageKind::set_processing) {
@@ -32,7 +32,7 @@ Message::~Message()
     }
 }
 
-Message Message::from_raw_data(const raw_data &value, unsigned client_id)
+Message Message::from_raw_data(const raw_data &value, unsigned int client_id)
 {
     if (value.size() < MIN_DATA_LEN) {
         throw std::runtime_error("message is too short");
@@ -127,6 +127,16 @@ Message::operator raw_data() const
         throw std::runtime_error("unknown message kind");
     }
     return data;
+}
+
+unsigned int Message::client_id() const
+{
+    return client_id_;
+}
+
+MessageKind Message::kind() const
+{
+    return kind_;
 }
 
 Message::operator std::string() const

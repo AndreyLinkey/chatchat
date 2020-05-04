@@ -22,17 +22,19 @@ enum class MessageKind
 class Message
 {
 public:
-    Message(unsigned client_id, MessageKind kind);
-    Message(unsigned client_id, MessageKind kind, std::string value);
-    Message(unsigned client_id, MessageKind kind, bool value);
+    Message(unsigned int client_id, MessageKind kind);
+    Message(unsigned int client_id, MessageKind kind, std::string value);
+    Message(unsigned int  client_id, MessageKind kind, bool value);
     ~Message();
-    static Message from_raw_data(const raw_data &value, unsigned client_id = 0);
+    static Message from_raw_data(const raw_data &value, unsigned int client_id = 0);
     operator raw_data() const;
+    unsigned int client_id() const;
+    MessageKind kind() const;
     operator std::string() const;
     operator bool() const;
 
 private:
-    const unsigned client_id_;
+    const unsigned int client_id_;
     const MessageKind kind_;
     const union argument
     {

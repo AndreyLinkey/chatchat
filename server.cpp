@@ -1,7 +1,7 @@
 #include "server.h"
 
 Server::Server(unsigned short port)
-    : socket_fd_(0), client_idx_(1)
+    : socket_fd_(0), new_client_idx_(1)
 {
     try {
         prepare_socket(port);
@@ -24,17 +24,96 @@ void Server::begin_accept(bool &terminate_flag)
             return;
         }       
     }
-    for(client_handler_ptr& hdl: clients_)
-        hdl -> exit();
-    for(client_thread_ptr& thr: threads_)
-        thr -> join();
+    for(std::map<unsigned int, client_handler_ptr>::value_type& hdl: clients_)
+        hdl.second -> exit();
+    for(std::map<unsigned int, client_thread_ptr>::value_type& thr: threads_)
+        thr.second -> join();
 
     close(socket_fd_);
 }
 
 void Server::message_received(const Message &message)
 {
-    // TODO actions when message received
+    std::lock_guard<std::mutex> lock(processing_);
+
+    std::map<unsigned int, client_handler_ptr>::const_iterator client_it = clients_.find(message.client_id());
+    if (client_it == clients_.cend()) {
+        return;
+    }
+
+    switch (message.kind()) {
+    case MessageKind::message:
+    {
+        std::vector<unsigned int> handlers(subscribed_handlers(client_it->second->groups()));
+        if (!client_it->second->echoing_required()) {
+            handlers.erase(std::find(handlers.cbegin(), handlers.cend(), message.client_id()));
+        }
+        std::vector<unsigned int>::iterator res = std::partition(handlers.begin(), handlers.end(),
+            [this](unsigned int id) {
+                return this->clients_.at(id)->processing_required();
+            }
+        );
+
+        if (std::distance(handlers.begin(), res) > 0) {
+            std::string processed_message = process_message(message);
+            send_message(std::vector<unsigned int>(handlers.begin(), res), processed_message);
+        }
+        send_message(std::vector<unsigned int>(res, handlers.end()), message);
+        break;
+    }
+    case MessageKind::subscribe:
+    {
+        bool res = client_it->second->subscribe(message);
+        if (client_it->second->echoing_required()) {
+            send_message(message.client_id(), res ? "group already subscribed" : "group successfully subscribed");
+        }
+        break;
+    }
+    case MessageKind::leave:
+    {
+        bool res = client_it->second->leave(message);
+        if (client_it->second->echoing_required()) {
+            send_message(message.client_id(), res ? "group successfully left" : "unable to leave group");
+        }
+        break;
+    }
+    case MessageKind::who:
+    {
+        std::vector<unsigned int> handlers(subscribed_handlers(client_it->second->groups()));
+        std::string res;
+        for (unsigned int id : handlers) {
+            res += std::to_string(id) + (id == message.client_id() ? "(you) " : " ");
+        }
+        res.pop_back();
+        send_message(message.client_id(), res);
+        break;
+    }
+    case MessageKind::set_echoing:
+    {
+        client_it->second->set_echoing(message);
+        if (client_it->second->echoing_required()) {
+            send_message(message.client_id(), std::string("echoing ") + (message ? "enabled" : "disabled"));
+        }
+        break;
+    }
+    case MessageKind::set_processing:
+        client_it->second->set_processing(message);
+        if (client_it->second->echoing_required()) {
+            send_message(message.client_id(), std::string("processing ") + (message ? "enabled" : "disabled"));
+        }
+        break;
+    case MessageKind::close_connection:
+    {
+        client_it->second->exit();
+        threads_.at(message.client_id())->join();
+        clients_.erase(client_it);
+        threads_.erase(message.client_id());
+        break;
+    }
+    default:
+        throw std::runtime_error("unexpected message kind received");
+        break;
+    }
 }
 
 void Server::prepare_socket(unsigned short port)
@@ -80,27 +159,65 @@ void Server::accept_connection()
             throw std::system_error(std::error_code(errno, std::generic_category()),
                                     "unable to accept connection");
 
-        clients_.emplace_back(new client_handler(client_fd, POLL_TIMEOUT, client_idx_,
-            receive_callback(std::bind(&Server::message_received, this, std::placeholders::_1))));
-        threads_.emplace_back(new std::thread(std::bind(&client_handler::run, clients_.back().get())));
-        std::cout << "client number " << std::to_string(client_idx_) << " accepted" << std::endl;
+        clients_.emplace(std::make_pair(new_client_idx_,
+            new client_handler(client_fd, POLL_TIMEOUT, new_client_idx_,
+                receive_callback(std::bind(&Server::message_received, this, std::placeholders::_1))
+            ))
+        );
+        threads_.emplace(std::make_pair(new_client_idx_,
+            new std::thread(std::bind(&client_handler::run, clients_.at(new_client_idx_).get())))
+        );
+        std::cout << "client number " << std::to_string(new_client_idx_) << " accepted" << std::endl;
+        ++new_client_idx_;
+    }
+}
+
+void Server::send_message(unsigned int client_id, const std::string &message) const
+{
+    // TODO implement this
+}
+
+void Server::send_message(const std::vector<unsigned int>& client_ids, const std::string& message) const
+{
+    for (unsigned int id : client_ids) {
+        send_message(id, message);
     }
 }
 
 void Server::cleanup_terminated()
 {
-    std::vector<client_handler_ptr>::iterator it = clients_.begin();
-    while(it < clients_.end())
+    std::map<unsigned int, client_handler_ptr>::iterator it = clients_.begin();
+    while(it != clients_.end())
     {
-        if((*it) -> terminated())
+        if((it->second)->terminated())
         {
             long idx = std::distance(clients_.begin(), it);
             it = clients_.erase(it);
             threads_[static_cast<unsigned long>(idx)] -> join();
-            threads_.erase(threads_.begin() + idx);
+            threads_.erase(it->first);
             continue;
         }
         ++it;
     }
 }
 
+std::vector<unsigned int> Server::subscribed_handlers(const std::vector<std::string>& groups) const
+{
+    std::vector<unsigned int> handlers;
+    for(const std::map<unsigned int, client_handler_ptr>::value_type& hdl: clients_) {
+        for (const std::string& group : groups)
+        {
+            if (hdl.second->in_group(group)) {
+                handlers.push_back(hdl.first);
+                break;
+            }
+        }
+    }
+    return handlers;
+}
+
+std::string Server::process_message(const std::string& message)
+{
+    // TODO do some transformations with message
+    return message;
+}

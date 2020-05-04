@@ -1,7 +1,6 @@
 #ifndef CLIENT_HANDLER_H
 #define CLIENT_HANDLER_H
 
-#include <atomic>
 #include <poll.h>
 #include <unistd.h>
 #include <system_error>
@@ -26,23 +25,27 @@ public:
     void send(const Message& message);
     unsigned int id() const;
     bool terminated() const;
-    std::vector<std::string> groups() const;
-    bool in_group(const std::string &group) const;
+    const std::vector<std::string>& groups() const;
+    bool in_group(const std::string& group) const;
+    bool subscribe(const std::string& group);
+    bool leave(const std::string& group);
     bool echoing_required() const;
+    void set_echoing(bool value);
     bool processing_required() const;
+    void set_processing(bool value);
 
 private:
     unsigned int read_data();
+
     const int client_fd_;
     const unsigned int timeout_;
     raw_data data_buff_;
     const unsigned int client_id_;
     const std::function<void(const Message&)> on_receive_;
-    std::atomic<bool> terminate_;
-    mutable std::mutex groups_lock_;
+    bool terminate_;
     std::vector<std::string> groups_;
-    std::atomic<bool> echoing_msg_;
-    std::atomic<bool> processing_msg_;
+    bool echoing_msg_;
+    bool processing_msg_;
 };
 
 #endif // CLIENT_HANDLER_H
