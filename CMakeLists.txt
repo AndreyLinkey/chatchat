@@ -10,11 +10,13 @@ set(SERVER_SOURCES
         chat_srv.cpp
         server.cpp
         client_handler.cpp
+        message.cpp
     )
 
 set(SERVER_HEADERS
         server.h
         client_handler.h
+        message.h
         common.h
     )
 

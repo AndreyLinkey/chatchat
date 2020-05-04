@@ -1,12 +1,82 @@
 #include "client_handler.h"
 
-client_handler::client_handler(int client_fd, unsigned timeout, unsigned client_id)
- : client_fd_(client_fd), terminate_(false), timeout_(timeout), client_id_(client_id)
+client_handler::client_handler(int client_fd, unsigned int timeout, unsigned int client_id, receive_callback on_message_receive)
+ : client_fd_(client_fd), timeout_(timeout), data_buff_(DATA_BUFF_LEN), client_id_(client_id), on_receive_(on_message_receive),
+   terminate_(false), echoing_msg_(false), processing_msg_(true)
 {
 
 }
 
-unsigned client_handler::read_data()
+void client_handler::run()
+{
+    while(!terminate_) {
+        unsigned int count = 0;
+        try {
+            count = read_data();
+        } catch (const std::exception &e) {
+            terminate_ = true;
+            std::cerr << "error while receiving file: " << e.what() << std::endl;
+            break;
+        }
+
+        if(count > 0) {
+            try {
+                Message msg = Message::from_raw_data(data_buff_, client_id_);
+                // TODO process message here
+            } catch (const std::exception &e) {
+                std::cerr << "error while processing message: " << e.what() << std::endl;
+            }
+        } else {
+            if(terminate_)
+                break;
+        }
+    }
+    close(client_fd_);
+}
+
+void client_handler::exit()
+{
+    terminate_ = true;
+}
+
+void send(const Message& message)
+{
+    // TODO actions to send message
+}
+
+unsigned int client_handler::id() const
+{
+    return client_id_;
+}
+
+bool client_handler::terminated() const
+{
+    return terminate_;
+}
+
+std::vector<std::string> client_handler::groups() const
+{
+    std::lock_guard<std::mutex> lock(groups_lock_);
+    return std::vector<std::string>(groups_);
+}
+
+bool client_handler::in_group(const std::string &group) const
+{
+    std::lock_guard<std::mutex> lock(groups_lock_);
+    return std::find(groups_.cbegin(), groups_.cend(), group) != groups_.end();
+}
+
+bool client_handler::echoing_required() const
+{
+    return echoing_msg_;
+}
+
+bool client_handler::processing_required() const
+{
+    return processing_msg_;
+}
+
+unsigned int client_handler::read_data()
 {
     struct pollfd fds;
     fds.fd = client_fd_;
@@ -22,8 +92,7 @@ unsigned client_handler::read_data()
         break;
     default:
         unsigned count = 0;
-        // read data here
-        // count = read(client_fd_, buff, buff_size);
+        count = read(client_fd_, &data_buff_[0], data_buff_.size());
         if(count > 0)
             return count;
         else {
@@ -32,43 +101,4 @@ unsigned client_handler::read_data()
         }
     }
     return 0;
-}
-
-void client_handler::run()
-{
-    while(!terminate_)
-    {
-        long count = 0;
-        try
-        {
-            count = read_data();
-        }
-        catch (const std::exception &e)
-        {
-            terminate_ = true;
-            std::cerr << "error while receiving file: " << e.what() << std::endl;
-            break;
-        }
-
-        if(count > 0)
-        {
-            //perfom some action with data
-        }
-        else
-        {
-            if(terminate_)
-                break;
-        }
-    }
-    close(client_fd_);
-}
-
-void client_handler::exit()
-{
-    terminate_ = true;
-}
-
-bool client_handler::terminated()
-{
-    return terminate_;
 }

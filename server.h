@@ -12,6 +12,7 @@
 #include <iostream>
 
 #include "client_handler.h"
+#include "message.h"
 #include "common.h"
 
 class Server
@@ -19,6 +20,7 @@ class Server
 public:
     Server(unsigned short port);
     void begin_accept(bool &terminate_flag);
+    void message_received(const Message &message);
 
 private:
     using client_handler_ptr = std::unique_ptr<client_handler>;

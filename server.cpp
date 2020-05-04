@@ -15,19 +15,14 @@ Server::Server(unsigned short port)
 
 void Server::begin_accept(bool &terminate_flag)
 {
-    while(!terminate_flag)
-    {
-        try
-        {
+    while(!terminate_flag) {
+        try {
             cleanup_terminated();
             accept_connection();
-        }
-        catch (const std::exception &e)
-        {
+        } catch (const std::exception &e) {
             std::cerr << "error while accepting connection: " << e.what() << std::endl;
             return;
-        }
-
+        }       
     }
     for(client_handler_ptr& hdl: clients_)
         hdl -> exit();
@@ -35,6 +30,11 @@ void Server::begin_accept(bool &terminate_flag)
         thr -> join();
 
     close(socket_fd_);
+}
+
+void Server::message_received(const Message &message)
+{
+    // TODO actions when message received
 }
 
 void Server::prepare_socket(unsigned short port)
@@ -80,7 +80,8 @@ void Server::accept_connection()
             throw std::system_error(std::error_code(errno, std::generic_category()),
                                     "unable to accept connection");
 
-        clients_.emplace_back(new client_handler(client_fd, POLL_TIMEOUT, client_idx_));
+        clients_.emplace_back(new client_handler(client_fd, POLL_TIMEOUT, client_idx_,
+            receive_callback(std::bind(&Server::message_received, this, std::placeholders::_1))));
         threads_.emplace_back(new std::thread(std::bind(&client_handler::run, clients_.back().get())));
         std::cout << "client number " << std::to_string(client_idx_) << " accepted" << std::endl;
     }
