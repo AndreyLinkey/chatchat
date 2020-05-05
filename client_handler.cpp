@@ -31,6 +31,12 @@ void client_handler::run()
                 break;
         }
     }
+    try {
+        on_receive_(Message(client_id_, MessageKind::close_connection));
+    } catch (const std::exception &e) {
+        std::cerr << "can't send terminate message to server: " << e.what() << std::endl;
+    }
+
     close(client_fd_);
 }
 

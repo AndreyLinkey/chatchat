@@ -29,7 +29,7 @@ private:
     using client_handler_ptr = std::unique_ptr<client_handler>;
     using client_thread_ptr = std::unique_ptr<std::thread>;
 
-    void prepare_socket(unsigned short port);
+    int prepare_socket(unsigned short port);
     void accept_connection();
     void send_message(unsigned int client_id, const std::string& message) const;
     void send_message(const std::vector<unsigned int>& client_ids, const std::string &message) const;
@@ -44,7 +44,5 @@ private:
     std::map<unsigned int, client_thread_ptr> threads_;
 
 };
-
-
 
 #endif // SERVER_H

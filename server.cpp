@@ -4,7 +4,7 @@ Server::Server(unsigned short port)
     : socket_fd_(0), new_client_idx_(1)
 {
     try {
-        prepare_socket(port);
+        socket_fd_ = prepare_socket(port);
     }  catch (...) {
         if (socket_fd_) {
             close(socket_fd_);
@@ -25,8 +25,15 @@ void Server::begin_accept(bool &terminate_flag)
             return;
         }       
     }
-    for(std::map<unsigned int, client_handler_ptr>::value_type& hdl: clients_)
+    std::lock_guard<std::mutex> lock(processing_);
+    for(std::map<unsigned int, client_handler_ptr>::value_type& hdl: clients_) {
+        try {
+            hdl.second->send(Message(hdl.first, MessageKind::close_connection));
+        } catch (std::exception &e) {
+            std::cerr << "can't send terminate message to client: " << e.what() << std::endl;
+        }
         hdl.second -> exit();
+    }
     for(std::map<unsigned int, client_thread_ptr>::value_type& thr: threads_)
         thr.second -> join();
 
@@ -117,7 +124,7 @@ void Server::message_received(const Message &message)
     }
 }
 
-void Server::prepare_socket(unsigned short port)
+int Server::prepare_socket(unsigned short port)
 {
     int srv_fd = socket(AF_INET, SOCK_STREAM, 0);
     if(srv_fd < 0)
@@ -141,6 +148,7 @@ void Server::prepare_socket(unsigned short port)
     if(listen(srv_fd, 3) < 0)
         throw std::system_error(std::error_code(errno, std::generic_category()),
                                 "unable to listen socket");
+    return srv_fd;
 }
 
 void Server::accept_connection()
@@ -160,6 +168,7 @@ void Server::accept_connection()
             throw std::system_error(std::error_code(errno, std::generic_category()),
                                     "unable to accept connection");
 
+        std::lock_guard<std::mutex> lock(processing_);
         clients_.emplace(std::make_pair(new_client_idx_,
             new client_handler(client_fd, POLL_TIMEOUT, new_client_idx_,
                 receive_callback(std::bind(&Server::message_received, this, std::placeholders::_1))
@@ -188,6 +197,7 @@ void Server::send_message(const std::vector<unsigned int>& client_ids, const std
 
 void Server::cleanup_terminated()
 {
+    std::lock_guard<std::mutex> lock(processing_);
     std::map<unsigned int, client_handler_ptr>::iterator it = clients_.begin();
     while(it != clients_.end())
     {

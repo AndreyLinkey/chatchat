@@ -3,7 +3,7 @@
 Message::Message(unsigned int client_id, MessageKind kind)
     : client_id_(client_id), kind_(kind), argument_(false)
 {
-    if (kind_ != MessageKind::who) {
+    if (kind_ != MessageKind::who && kind != MessageKind::close_connection) {
         throw std::runtime_error("unable to create message without value");
     }
 }
@@ -38,9 +38,6 @@ Message Message::from_raw_data(const raw_data &value, unsigned int client_id)
         throw std::runtime_error("message is too short");
     }
     MessageKind kind = static_cast<MessageKind>(value[0]);
-    if (kind != MessageKind::server_response && client_id == 0) {
-        throw std::runtime_error("invalid client id value for this message kind");
-    }
 
     switch (kind) {
     case MessageKind::message:
@@ -113,6 +110,9 @@ raw_data Message::bytes() const
         break;
     case MessageKind::server_response:
     {
+        if (client_id_ == 0)
+            throw std::runtime_error("server message must contains client id");
+
         uint32_t net_id = htonl(client_id_);
         data.insert(data.end(), sizeof(uint32_t), 0);
         data[1] = (net_id >> 24) & 0xFF;
@@ -131,6 +131,8 @@ raw_data Message::bytes() const
 
 unsigned int Message::client_id() const
 {
+    if (client_id_ == 0)
+        throw std::runtime_error("attempted access to message client id when it is not set");
     return client_id_;
 }
 

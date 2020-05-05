@@ -4,6 +4,7 @@
 #include <memory>
 #include <string.h>
 #include <arpa/inet.h>
+#include <functional>
 
 #include "common.h"
 
@@ -19,12 +20,17 @@ enum class MessageKind
     close_connection
 };
 
+class Message;
+
+using raw_data = std::vector<uint8_t>;
+using receive_callback = std::function<void(const Message&)>;
+
 class Message
 {
 public:
     Message(unsigned int client_id, MessageKind kind);
     Message(unsigned int client_id, MessageKind kind, std::string value);
-    Message(unsigned int  client_id, MessageKind kind, bool value);
+    Message(unsigned int client_id, MessageKind kind, bool value);
     ~Message();
     static Message from_raw_data(const raw_data &value, unsigned int client_id = 0);
     raw_data bytes() const;

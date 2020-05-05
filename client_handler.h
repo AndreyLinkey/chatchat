@@ -14,8 +14,6 @@
 #include "common.h"
 #include "message.h"
 
-using receive_callback = std::function<void(const Message&)>;
-
 class client_handler
 {
 public:
