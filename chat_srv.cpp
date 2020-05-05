@@ -15,8 +15,13 @@ int main()
     std::signal(SIGINT, sig_handler);
     std::signal(SIGTERM, sig_handler);
 
-    Server srv(8888);
+    try {
+        Server srv(8888);
+        srv.begin_accept(terminate);
+    } catch (const std::exception &e) {
+        std::cerr << "server error: " << e.what() << std::endl;
+    }
 
-    srv.begin_accept(terminate);
+
     return 0;
 }

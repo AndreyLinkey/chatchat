@@ -89,7 +89,7 @@ Message Message::from_raw_data(const raw_data &value, unsigned int client_id)
 
 }
 
-Message::operator raw_data() const
+raw_data Message::bytes() const
 {
     raw_data data(MIN_DATA_LEN);
     data[0] = static_cast<uint8_t>(kind_);

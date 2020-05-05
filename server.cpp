@@ -9,6 +9,7 @@ Server::Server(unsigned short port)
         if (socket_fd_) {
             close(socket_fd_);
         }
+        throw;
     }
 
 }
@@ -174,7 +175,8 @@ void Server::accept_connection()
 
 void Server::send_message(unsigned int client_id, const std::string &message) const
 {
-    // TODO implement this
+    Message msg(client_id, MessageKind::server_response, message);
+    clients_.at(client_id)->send(msg);
 }
 
 void Server::send_message(const std::vector<unsigned int>& client_ids, const std::string& message) const

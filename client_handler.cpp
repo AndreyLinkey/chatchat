@@ -39,9 +39,14 @@ void client_handler::exit()
     terminate_ = true;
 }
 
-void send(const Message& message)
+void client_handler::send(const Message& message)
 {
-    // TODO actions to send message
+    raw_data data(message.bytes());
+    int count = ::send(client_fd_, data.data(), data.size(), 0);
+    if(count <= 0) {
+        throw std::system_error(std::error_code(errno, std::generic_category()),
+                                "error while sending message");
+    }
 }
 
 unsigned int client_handler::id() const

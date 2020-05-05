@@ -27,7 +27,7 @@ public:
     Message(unsigned int  client_id, MessageKind kind, bool value);
     ~Message();
     static Message from_raw_data(const raw_data &value, unsigned int client_id = 0);
-    operator raw_data() const;
+    raw_data bytes() const;
     unsigned int client_id() const;
     MessageKind kind() const;
     operator std::string() const;
