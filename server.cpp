@@ -53,9 +53,17 @@ void Server::message_received(const Message &message)
     case MessageKind::message:
     {
         std::vector<unsigned int> handlers(subscribed_handlers(client_it->second->groups()));
+
         if (!client_it->second->echoing_required()) {
-            handlers.erase(std::find(handlers.cbegin(), handlers.cend(), message.client_id()));
+            std::vector<unsigned int>::const_iterator it = std::find(handlers.cbegin(), handlers.cend(), message.client_id());
+            if (it != handlers.end())
+                handlers.erase(it);
         }
+
+        if (handlers.empty()) {
+            break;
+        }
+
         std::vector<unsigned int>::iterator res = std::partition(handlers.begin(), handlers.end(),
             [this](unsigned int id) {
                 return this->clients_.at(id)->processing_required();
@@ -64,16 +72,17 @@ void Server::message_received(const Message &message)
 
         if (std::distance(handlers.begin(), res) > 0) {
             std::string processed_message = process_message(message);
-            send_message(std::vector<unsigned int>(handlers.begin(), res), processed_message);
+            send_message(std::vector<unsigned int>(handlers.begin(), res), message.client_id(), processed_message);
         }
-        send_message(std::vector<unsigned int>(res, handlers.end()), message);
+        send_message(std::vector<unsigned int>(res, handlers.end()), message.client_id(), message);
         break;
     }
     case MessageKind::subscribe:
     {
         bool res = client_it->second->subscribe(message);
         if (client_it->second->echoing_required()) {
-            send_message(message.client_id(), res ? "group already subscribed" : "group successfully subscribed");
+            send_message(message.client_id(), message.client_id(),
+                         res ? "group successfully subscribed" : "group already subscribed");
         }
         break;
     }
@@ -81,7 +90,8 @@ void Server::message_received(const Message &message)
     {
         bool res = client_it->second->leave(message);
         if (client_it->second->echoing_required()) {
-            send_message(message.client_id(), res ? "group successfully left" : "unable to leave group");
+            send_message(message.client_id(), message.client_id(),
+                         res ? "group successfully left" : "unable to leave group");
         }
         break;
     }
@@ -89,33 +99,36 @@ void Server::message_received(const Message &message)
     {
         std::vector<unsigned int> handlers(subscribed_handlers(client_it->second->groups()));
         std::string res;
-        for (unsigned int id : handlers) {
-            res += std::to_string(id) + (id == message.client_id() ? "(you) " : " ");
+        if (handlers.empty()) {
+            res = "no members";
+        } else {
+            for (unsigned int id : handlers) {
+                res += std::to_string(id) + (id == message.client_id() ? "(you) " : " ");
+            }
+            res.pop_back();
         }
-        res.pop_back();
-        send_message(message.client_id(), res);
+        send_message(message.client_id(), message.client_id(), res);
         break;
     }
     case MessageKind::set_echoing:
     {
         client_it->second->set_echoing(message);
         if (client_it->second->echoing_required()) {
-            send_message(message.client_id(), std::string("echoing ") + (message ? "enabled" : "disabled"));
+            send_message(message.client_id(), message.client_id(),
+                         std::string("echoing ") + (message ? "enabled" : "disabled"));
         }
         break;
     }
     case MessageKind::set_processing:
         client_it->second->set_processing(message);
         if (client_it->second->echoing_required()) {
-            send_message(message.client_id(), std::string("processing ") + (message ? "enabled" : "disabled"));
+            send_message(message.client_id(), message.client_id(),
+                         std::string("processing ") + (message ? "enabled" : "disabled"));
         }
         break;
     case MessageKind::close_connection:
     {
         client_it->second->exit();
-        threads_.at(message.client_id())->join();
-        clients_.erase(client_it);
-        threads_.erase(message.client_id());
         break;
     }
     default:
@@ -182,16 +195,16 @@ void Server::accept_connection()
     }
 }
 
-void Server::send_message(unsigned int client_id, const std::string &message) const
+void Server::send_message(unsigned int recipient, unsigned int sender, const std::string &message) const
 {
-    Message msg(client_id, MessageKind::server_response, message);
-    clients_.at(client_id)->send(msg);
+    Message msg(sender, MessageKind::server_response, message);
+    clients_.at(recipient)->send(msg);
 }
 
-void Server::send_message(const std::vector<unsigned int>& client_ids, const std::string& message) const
+void Server::send_message(const std::vector<unsigned int>& recipients, unsigned int sender, const std::string& message) const
 {
-    for (unsigned int id : client_ids) {
-        send_message(id, message);
+    for (unsigned int id : recipients) {
+        send_message(id, sender, message);
     }
 }
 
@@ -203,10 +216,11 @@ void Server::cleanup_terminated()
     {
         if((it->second)->terminated())
         {
-            long idx = std::distance(clients_.begin(), it);
+            unsigned int id = it->first;
             it = clients_.erase(it);
-            threads_[static_cast<unsigned long>(idx)] -> join();
-            threads_.erase(it->first);
+            threads_.at(id)->join();
+            threads_.erase(id);
+            std::cout << "client number " << std::to_string(id) << " left" << std::endl;
             continue;
         }
         ++it;
@@ -215,6 +229,9 @@ void Server::cleanup_terminated()
 
 std::vector<unsigned int> Server::subscribed_handlers(const std::vector<std::string>& groups) const
 {
+    if (groups.empty())
+        return {};
+
     std::vector<unsigned int> handlers;
     for(const std::map<unsigned int, client_handler_ptr>::value_type& hdl: clients_) {
         for (const std::string& group : groups)

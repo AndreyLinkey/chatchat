@@ -5,12 +5,13 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <functional>
+#include <algorithm>
 
 #include "common.h"
 
 enum class MessageKind
 {
-    message,
+    message = 1,
     subscribe,
     leave,
     who,

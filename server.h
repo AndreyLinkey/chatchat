@@ -31,8 +31,8 @@ private:
 
     int prepare_socket(unsigned short port);
     void accept_connection();
-    void send_message(unsigned int client_id, const std::string& message) const;
-    void send_message(const std::vector<unsigned int>& client_ids, const std::string &message) const;
+    void send_message(unsigned int recipient, unsigned int sender, const std::string& message) const;
+    void send_message(const std::vector<unsigned int>& recipients, unsigned int sender, const std::string &message) const;
     void cleanup_terminated();
     std::vector<unsigned int> subscribed_handlers(const std::vector<std::string>& groups) const;
     std::string process_message(const std::string& message);

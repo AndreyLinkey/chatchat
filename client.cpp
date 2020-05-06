@@ -1,7 +1,7 @@
 #include "client.h"
 
-Client::Client(const std::string& ip_address, unsigned short port, unsigned int timeout, receive_callback on_message_receive)
-    : socket_fd_(0), timeout_(timeout), data_buff_(DATA_BUFF_LEN), on_receive_(on_message_receive), terminate_(false)
+Client::Client(const std::string& ip_address, unsigned short port, unsigned int timeout, terminate_callback on_terminate)
+    : socket_fd_(0), timeout_(timeout), data_buff_(DATA_BUFF_LEN), terminate_callback_(on_terminate), terminate_(false)
 {
     try {
         socket_fd_ = prepare_socket(ip_address.c_str(), port);
@@ -20,20 +20,22 @@ void Client::run()
         try {
             count = read_data();
         } catch (const std::exception &e) {
-            terminate_ = true;
+            terminate_callback_();
             std::cerr << "error while receiving file: " << e.what() << std::endl;
             break;
         }
 
         switch (count) {
         case -1:
+            terminate_callback_();
             terminate_ = true;
         case 0:
             break;
         default:
             try {
                 Message msg = Message::from_raw_data(data_buff_, 0);
-                on_receive_(msg);
+                memset(&data_buff_[0], '\0', count);
+                message_received(msg);
             } catch (const std::exception &e) {
                 std::cerr << "error while processing message: " << e.what() << std::endl;
             }
@@ -48,16 +50,64 @@ void Client::terminate()
     terminate_ = true;
 }
 
-void Client::send(const Message& message)
+void Client::send_message(const std::string& message) try
 {
-    raw_data data(message.bytes());
-    int count = ::send(socket_fd_, data.data(), data.size(), 0);
-    if(count <= 0) {
-        throw std::system_error(std::error_code(errno, std::generic_category()),
-                                "error while sending message");
-    }
-}
+    if (message.empty())
+        return;
 
+    if (message[0] == '#') {
+        unsigned long cmd_end = message.find(' ');
+        if (cmd_end == std::string::npos)
+            cmd_end = message.length();
+        std::string cmd(message, 1, cmd_end - 1);
+
+        std::map<MessageKind, std::string>::const_iterator it = std::find_if(commands.cbegin(), commands.cend(),
+            [&cmd](const std::map<MessageKind, std::string>::value_type& cmd_pair) {
+                return cmd == cmd_pair.second;
+            });
+        if (it == commands.cend()) {
+            throw std::runtime_error("unknown command " + cmd);
+        }
+
+        MessageKind kind = it->first;
+        switch (kind) {
+        case MessageKind::subscribe:
+        case MessageKind::leave:
+        {
+            std::string msg(message, cmd_end + 1);
+            if (msg.empty())
+                throw std::runtime_error("no message value");
+            send(Message(0, kind, msg));
+            break;
+        }
+        case MessageKind::who:
+            send(Message(0, kind));
+            break;
+        case MessageKind::close_connection:
+            send(Message(0, kind));
+            terminate_callback_();
+            break;
+        case MessageKind::set_echoing:
+        case MessageKind::set_processing:
+        {
+            std::string msg(message, cmd_end + 1);
+            if (msg.empty())
+                throw std::runtime_error("no message value");
+            bool value = msg == "1" || msg == "true" || msg == "enable";
+            send(Message(0, kind, value));
+            break;
+        }
+        default:
+            throw std::runtime_error("unexpectet message kind");
+            break;
+        }
+    } else {
+        Message msg = Message(0, MessageKind::message, message);
+        send(Message(0, MessageKind::message, message));
+    }
+} catch (const std::exception& e) {
+    std::cerr << "error while processing input: " << e.what() << std::endl;
+}
 
 int Client::prepare_socket(const char* ip_address, unsigned short port)
 {
@@ -106,4 +156,34 @@ int Client::read_data()
         }
     }
     return 0;
+}
+
+void Client::message_received(const Message &message)
+{
+    MessageKind kind = message.kind();
+    switch (kind) {
+    case MessageKind::server_response:
+    {
+        std::string output("client id " + std::to_string(message.client_id()) + ": " + std::string(message) + '\n');
+        std::cout << output << std::flush;
+        break;
+    }
+    case MessageKind::close_connection:
+        terminate_callback_();
+        break;
+    default:
+        throw std::runtime_error("unexpected message kind received");
+        break;
+    }
+
+}
+
+void Client::send(const Message& message)
+{
+    raw_data data(message.bytes());
+    int count = ::send(socket_fd_, data.data(), data.size(), 0);
+    if(count <= 0) {
+        throw std::system_error(std::error_code(errno, std::generic_category()),
+                                "error while sending message");
+    }
 }

@@ -2,7 +2,7 @@
 
 client_handler::client_handler(int client_fd, unsigned int timeout, unsigned int client_id, receive_callback on_message_receive)
  : client_fd_(client_fd), timeout_(timeout), data_buff_(DATA_BUFF_LEN), client_id_(client_id), on_receive_(on_message_receive),
-   terminate_(false), echoing_msg_(false), processing_msg_(true)
+   terminate_(false), echoing_msg_(true), processing_msg_(true)
 {
 
 }
@@ -15,13 +15,14 @@ void client_handler::run()
             count = read_data();
         } catch (const std::exception &e) {
             terminate_ = true;
-            std::cerr << "error while receiving file: " << e.what() << std::endl;
+            std::cerr << "error while receiving message: " << e.what() << std::endl;
             break;
         }
 
         if(count > 0) {
             try {
                 Message msg = Message::from_raw_data(data_buff_, client_id_);
+                memset(&data_buff_[0], '\0', count);
                 on_receive_(msg);
             } catch (const std::exception &e) {
                 std::cerr << "error while processing message: " << e.what() << std::endl;
@@ -31,12 +32,6 @@ void client_handler::run()
                 break;
         }
     }
-    try {
-        on_receive_(Message(client_id_, MessageKind::close_connection));
-    } catch (const std::exception &e) {
-        std::cerr << "can't send terminate message to server: " << e.what() << std::endl;
-    }
-
     close(client_fd_);
 }
 

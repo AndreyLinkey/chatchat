@@ -17,7 +17,9 @@ int main()
 
     try {
         Server srv(DEFAULT_PORT);
+        std::cout << "server started" << std::endl;
         srv.begin_accept(terminate);
+        std::cout << "server terminated" << std::endl;
     } catch (const std::exception &e) {
         std::cerr << "server error: " << e.what() << std::endl;
     }

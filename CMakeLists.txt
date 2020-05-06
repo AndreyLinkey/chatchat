@@ -5,7 +5,6 @@ project(chatchat LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-
 set(SERVER_SOURCES
         chat_srv.cpp
         server.cpp

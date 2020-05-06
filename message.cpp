@@ -11,7 +11,8 @@ Message::Message(unsigned int client_id, MessageKind kind)
 Message::Message(unsigned int client_id, MessageKind kind, std::string value)
     : client_id_(client_id), kind_(kind), argument_(value)
 {
-    if (kind_ != MessageKind::message && kind_ != MessageKind::subscribe && kind_ != MessageKind::leave) {
+    if (kind_ != MessageKind::message && kind_ != MessageKind::subscribe && kind_ != MessageKind::leave
+            && kind != MessageKind::server_response) {
         free(argument_.string);
         throw std::runtime_error("unable to set value for given message kind");
     }
@@ -32,12 +33,12 @@ Message::~Message()
     }
 }
 
-Message Message::from_raw_data(const raw_data &value, unsigned int client_id)
+Message Message::from_raw_data(const raw_data &data, unsigned int client_id)
 {
-    if (value.size() < MIN_DATA_LEN) {
+    if (data.size() < MIN_DATA_LEN) {
         throw std::runtime_error("message is too short");
     }
-    MessageKind kind = static_cast<MessageKind>(value[0]);
+    MessageKind kind = static_cast<MessageKind>(data[0]);
 
     switch (kind) {
     case MessageKind::message:
@@ -45,8 +46,9 @@ Message Message::from_raw_data(const raw_data &value, unsigned int client_id)
     case MessageKind::leave:
     {
         std::string value;
-        if(value.size() > MIN_DATA_LEN) {
-            value = std::string(value[MIN_DATA_LEN], value.size() - MIN_DATA_LEN);
+        if(data.size() > MIN_DATA_LEN) {
+            int len = std::distance(data.cbegin(), std::find(data.cbegin(), data.cend(), '\0'));
+            value = std::string((char*)data.data() + MIN_DATA_LEN, len - MIN_DATA_LEN);
         }
         return Message(client_id, kind, value);
     }
@@ -58,25 +60,28 @@ Message Message::from_raw_data(const raw_data &value, unsigned int client_id)
     case MessageKind::set_processing:
     {
         bool enabled = false;
-        if(value.size() > MIN_DATA_LEN) {
-            enabled = value[MIN_DATA_LEN] > 0;
+        if(data.size() > MIN_DATA_LEN) {
+            enabled = data[MIN_DATA_LEN] > 0;
         }
         return Message(client_id, kind, enabled);
     }
     case MessageKind::server_response:
     {
         unsigned msg_beg = MIN_DATA_LEN + sizeof(uint32_t);
-        if(value.size() < msg_beg) {
+        if(data.size() < msg_beg) {
             throw std::runtime_error("unable to get client id");
         }
-        uint32_t client_id = static_cast<uint32_t>(value[0]) << 24 |
-                             static_cast<uint32_t>(value[1]) << 16 |
-                             static_cast<uint32_t>(value[2]) << 8  |
-                             static_cast<uint32_t>(value[3]);
+        uint32_t client_id = static_cast<uint32_t>(data[1]) << 24 |
+                             static_cast<uint32_t>(data[2]) << 16 |
+                             static_cast<uint32_t>(data[3]) << 8  |
+                             static_cast<uint32_t>(data[4]);
         client_id = ntohl(client_id);
         std::string value;
-        if(value.size() > msg_beg) {
-            value = std::string(value[msg_beg], value.size() - msg_beg);
+        if(data.size() > msg_beg) {
+            raw_data::const_iterator it = data.cbegin() + msg_beg;
+
+            int len = std::distance(it, std::find(it, data.cend(), '\0'));
+            value = std::string((char*)&(*it), len);
         }
         return Message(client_id, kind, value);
     }
@@ -126,6 +131,7 @@ raw_data Message::bytes() const
     default:
         throw std::runtime_error("unknown message kind");
     }
+    data.push_back('\0');
     return data;
 }
 
@@ -143,7 +149,8 @@ MessageKind Message::kind() const
 
 Message::operator std::string() const
 {
-    if (kind_ != MessageKind::message && kind_ != MessageKind::subscribe && kind_ != MessageKind::leave) {
+    if (kind_ != MessageKind::message && kind_ != MessageKind::subscribe && kind_ != MessageKind::leave
+            && kind_ != MessageKind::server_response) {
         throw std::runtime_error("unable to get string value for message");
     }
     return std::string(argument_.string);

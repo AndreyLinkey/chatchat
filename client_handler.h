@@ -39,7 +39,7 @@ private:
     const unsigned int timeout_;
     raw_data data_buff_;
     const unsigned int client_id_;
-    const std::function<void(const Message&)> on_receive_;
+    const receive_callback on_receive_;
     bool terminate_;
     std::vector<std::string> groups_;
     bool echoing_msg_;
