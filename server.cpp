@@ -248,6 +248,26 @@ std::vector<unsigned int> Server::subscribed_handlers(const std::vector<std::str
 
 std::string Server::process_message(const std::string& message)
 {
-    // TODO do some transformations with message
-    return message;
+    std::vector<int> output;
+    const std::regex re("\\D*(?:(\\d+)\\D*){1}");
+
+    std::transform(
+        std::sregex_token_iterator(message.cbegin(), message.cend(), re, 1),
+        std::sregex_token_iterator(),
+        std::back_inserter(output),
+            [](const std::string &str) {
+                return std::stoi(str);
+            }
+    );
+
+    std::sort(output.begin(), output.end());
+    std::string line;
+    std::for_each(output.cbegin(), output.cend(),
+        [&line](int i) {
+            line += (line.empty() ? "" : " ") + std::to_string(i);
+        }
+    );
+    int sum = std::accumulate(output.begin(), output.end(), 0);
+
+    return std::string('\n' + line + '\n' + std::to_string(sum));
 }

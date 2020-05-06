@@ -13,6 +13,8 @@
 #include <iostream>
 #include <mutex>
 #include <algorithm>
+#include <regex>
+#include <numeric>
 
 #include "client_handler.h"
 #include "message.h"

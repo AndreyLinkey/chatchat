@@ -53,6 +53,5 @@ int main(int argc, char *argv[])
         std::cerr << "server error: " << e.what() << std::endl;
     }
 
-
     return 0;
 }

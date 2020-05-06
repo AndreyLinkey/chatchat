@@ -3,8 +3,7 @@
 #include <functional>
 #include <iostream>
 #include <future>
-#include <map>
-#include <algorithm>
+#include <time.h>
 
 #include "client.h"
 
