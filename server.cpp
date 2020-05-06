@@ -1,7 +1,7 @@
 #include "server.h"
 
-Server::Server(unsigned short port)
-    : socket_fd_(0), new_client_idx_(1)
+Server::Server(unsigned short port, bool default_echoing, bool default_processing)
+    : socket_fd_(0), new_client_idx_(1), default_echoing_(default_echoing), default_processing_(default_processing)
 {
     try {
         socket_fd_ = prepare_socket(port);
@@ -184,7 +184,8 @@ void Server::accept_connection()
         std::lock_guard<std::mutex> lock(processing_);
         clients_.emplace(std::make_pair(new_client_idx_,
             new client_handler(client_fd, POLL_TIMEOUT, new_client_idx_,
-                receive_callback(std::bind(&Server::message_received, this, std::placeholders::_1))
+                receive_callback(std::bind(&Server::message_received, this, std::placeholders::_1)),
+                default_echoing_, default_processing_
             ))
         );
         threads_.emplace(std::make_pair(new_client_idx_,

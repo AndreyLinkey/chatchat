@@ -46,17 +46,57 @@ std::string read_command(const unsigned int timeout)
     return {};
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     std::signal(SIGINT, sig_handler);
     std::signal(SIGTERM, sig_handler);
 
+    std::string ip_addr(DEFAULT_IP_ADDR);
+    unsigned short port(DEFAULT_PORT);
+    std::string group(DEFAULT_GROUP);
+    bool echoing(DEFAULT_MESSAGE_ECHOING);
+    bool processing(DEFAULT_MESSAGE_PROCESSING);
+
+    int opt;
+    while((opt = getopt(argc, argv, "a:p:g:emh")) != -1)
+    {
+        switch(opt) {
+        case 'a':
+            ip_addr = std::string(optarg);
+            break;
+        case 'p':
+            try {
+                port = static_cast<unsigned short>(std::stoi(std::string(optarg)));
+            } catch (...) {
+                std::cerr << "invalid value of argument -p: " << optarg << std::endl;
+                return 1;
+            }
+            break;
+        case 'g':
+            group = std::string(optarg);
+            break;
+        case 'e':
+            echoing = true;
+            break;
+        case 'm':
+            processing = true;
+            break;
+        case 'h':
+            std::cout << "-a server ip address\n-p port number\n-g group name\n-e enable message echoing\n"
+                         "-m enable message processing"
+                      << std::endl;
+            return 0;
+        }
+    }
+
     try {
-        Client clnt(std::string("127.0.0.1"), DEFAULT_PORT, POLL_TIMEOUT, terminate_callback(set_terminate));
+        Client clnt(ip_addr, port, POLL_TIMEOUT, terminate_callback(set_terminate));
         std::thread thr(std::bind(&Client::run, &clnt));
         std::cout << "client started" << std::endl;
 
-        clnt.send_message("#join " + DEFAULT_GROUP);
+        clnt.send_message("#join " + group);
+        clnt.send_message(std::string("#echo ") + (echoing ? "1" : "0"));
+        clnt.send_message(std::string("#process ") + (processing ? "1" : "0"));
 
         while(!terminate) {
             std::future<std::string> command = std::async(std::launch::async, std::bind(read_command, POLL_TIMEOUT));

@@ -1,8 +1,9 @@
 #include "client_handler.h"
 
-client_handler::client_handler(int client_fd, unsigned int timeout, unsigned int client_id, receive_callback on_message_receive)
+client_handler::client_handler(int client_fd, unsigned int timeout, unsigned int client_id, receive_callback on_message_receive,
+                               bool enable_echoing, bool enable_processing)
  : client_fd_(client_fd), timeout_(timeout), data_buff_(DATA_BUFF_LEN), client_id_(client_id), on_receive_(on_message_receive),
-   terminate_(false), echoing_msg_(true), processing_msg_(true)
+   terminate_(false), echoing_msg_(enable_echoing), processing_msg_(enable_processing)
 {
 
 }

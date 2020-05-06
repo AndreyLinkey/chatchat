@@ -17,7 +17,8 @@
 class client_handler
 {
 public:
-    client_handler(int client_fd, unsigned int timeout, unsigned int client_id, receive_callback on_message_receive);
+    client_handler(int client_fd, unsigned int timeout, unsigned int client_id, receive_callback on_message_receive,
+                   bool enable_echoing, bool enable_processing);
     void run();
     void exit();
     void send(const Message& message);

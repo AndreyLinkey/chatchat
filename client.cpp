@@ -93,7 +93,7 @@ void Client::send_message(const std::string& message) try
             std::string msg(message, cmd_end + 1);
             if (msg.empty())
                 throw std::runtime_error("no message value");
-            bool value = msg == "1" || msg == "true" || msg == "enable";
+            bool value = msg == "1" || msg == "true" || msg == "enable" || msg == "yes";
             send(Message(0, kind, value));
             break;
         }

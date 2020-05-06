@@ -21,7 +21,7 @@
 class Server
 {
 public:
-    Server(unsigned short port);
+    Server(unsigned short port, bool default_echoing, bool default_processing);
     void begin_accept(bool &terminate_flag);
     void message_received(const Message &message);
 
@@ -40,6 +40,8 @@ private:
     std::mutex processing_;
     int socket_fd_;
     unsigned int new_client_idx_;
+    const bool default_echoing_;
+    const bool default_processing_;
     std::map<unsigned int, client_handler_ptr> clients_;
     std::map<unsigned int, client_thread_ptr> threads_;
 
