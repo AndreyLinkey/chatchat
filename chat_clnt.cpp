@@ -21,11 +21,10 @@ void sig_handler(int signal __attribute__((unused)))
 
 std::string read_command(const unsigned int timeout)
 {
+    struct pollfd fds;
+    fds.fd = STDIN_FILENO;
+    fds.events = POLLIN;
     while (!terminate) {
-        struct pollfd fds;
-        fds.fd = STDIN_FILENO;
-        fds.events = POLLIN;
-
         int poll_res = poll(&fds, 1, timeout);
         if (poll_res <= 0) {
             continue;
@@ -94,12 +93,15 @@ int main(int argc, char *argv[])
         std::cout << "client started" << std::endl;
 
         clnt.send_message("#join " + group);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         clnt.send_message(std::string("#echo ") + (echoing ? "1" : "0"));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         clnt.send_message(std::string("#process ") + (processing ? "1" : "0"));
 
+        std::future<std::string> command = std::async(std::launch::async, std::bind(read_command, POLL_TIMEOUT));
         while(!terminate) {
-            std::future<std::string> command = std::async(std::launch::async, std::bind(read_command, POLL_TIMEOUT));
-            std::string cmd = command.get();
+            std::string cmd(command.get());
+            command = std::async(std::launch::async, std::bind(read_command, POLL_TIMEOUT));
             if (cmd.empty()) {
                 continue;
             }
